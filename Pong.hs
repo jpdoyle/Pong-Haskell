@@ -15,10 +15,12 @@ pongOnce dt p = do
     return newP
 
 runPong :: Int -> IO ()
-runPong fps = void $ while (not . isPongOver) loadPong $
-    \p -> do
+runPong fps = loadPong >>= game >>= unloadPong
+    where
+        game init = while (not . isPongOver) init iterOnce
+        iterOnce p = do
             let dt = fromRational $ recip $ toRational fps :: Double
-            (timeTaken,totalTime,newP) <- fpsCap_ fps $ pongOnce dt p
+            (timeTaken,totalTime,newP) <- fpsCap fps p $ pongOnce dt
             let title = pongTitle newP
             setTitle $ title ++ ": " ++ show timeTaken ++ "/" ++ show totalTime
             return newP

@@ -7,6 +7,9 @@ data Pong = Pong
 loadPong :: IO Pong
 loadPong = undefined
 
+unloadPong :: Pong -> IO ()
+unloadPong = undefined
+
 isPongOver :: Pong -> Bool
 isPongOver = undefined
 
