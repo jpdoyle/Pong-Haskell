@@ -1,16 +1,17 @@
 module Game.Event where
 
-import qualified Graphics.UI.SDL as S
+import Control.Monad.SFML
+import qualified SFML.Window as W
+import Control.Monad.IO.Class
 
--- In case I come up with more event types later
-data Event = SDLEvent S.Event
+data Event = SFEvent W.SFEvent
 
-allAvailableEvents :: IO [Event]
-allAvailableEvents = do
-    e <- S.pollEvent
+allAvailableEvents :: MonadIO io => W.SFWindow w => w -> io [Event]
+allAvailableEvents w = liftIO $ do
+    e <- W.pollEvent w
     case e of
-        S.NoEvent -> return []
-        _         -> do
-                        es <- allAvailableEvents
-                        return (SDLEvent e:es)
+        Just ev -> do
+                    es <- allAvailableEvents w
+                    return (SFEvent ev:es)
+        Nothing -> return []
 

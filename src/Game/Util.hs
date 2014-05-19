@@ -1,6 +1,7 @@
 module Game.Util where
 
-import qualified Graphics.UI.SDL as S
+import Control.Monad.SFML
+import qualified Control.Monad.SFML.System as S
 
 while :: Monad m => (a -> Bool) -> a -> (a -> m a) -> m a
 while p start step = go start
@@ -20,24 +21,22 @@ while_ p step = go
                 else
                     return val
 
-fpsCap :: Int -> a -> (a -> IO a) -> IO (Int,Int,a)
+fpsCap :: Int -> a -> (a -> SFML a) -> SFML (Int,Int,a)
 fpsCap fps start step = let msPerFrame = 1000 `div` fps
                             iConvert :: (Integral a,Num c) => a -> c
                             iConvert = fromInteger . toInteger in
     do
-        startTime <- S.getTicks
+        clk <- S.createClock
+        startTime <- S.getElapsedTime clk
         next <- step start
-        endTime <- S.getTicks
+        endTime <- S.getElapsedTime clk
         let desiredTime = iConvert msPerFrame
         let actualTime = endTime - startTime
         let timeLeft = max 0 $ desiredTime - actualTime
-        S.delay timeLeft
-        lastTime <- S.getTicks
+        S.sfSleep timeLeft
+        lastTime <- S.getElapsedTime clk
         return (iConvert actualTime,iConvert (lastTime-startTime),next)
 
-fpsCap_ :: Int -> IO a -> IO (Int,Int,a)
+fpsCap_ :: Int -> SFML a -> SFML (Int,Int,a)
 fpsCap_ fps step = fpsCap fps undefined (const step)
-
-setTitle :: String -> IO ()
-setTitle s = S.rawSetCaption (Just s) Nothing
 
