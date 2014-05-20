@@ -12,12 +12,14 @@ import qualified SFML.Graphics as G
 import qualified SFML.Window as W
 import qualified Control.Monad.SFML.Graphics as GM
 import qualified Control.Monad.SFML.Window as WM
+import qualified Control.Monad.SFML.System as SM
 
 pongOnce :: Double -> G.RenderWindow -> Pong -> SFML Pong
 pongOnce dt w p = do
     events <- liftIO $ allAvailableEvents w
     let newP = (tickPong dt . processPongEvents events) p
     drawPong newP w
+    GM.display w
     return newP
 
 runPong :: PongParams -> Int -> G.RenderWindow -> SFML ()
@@ -29,18 +31,21 @@ runPong params fps wnd = void $ game (mkPong params)
             (timeTaken,totalTime,newP) <- fpsCap fps p
                                           $ pongOnce dt wnd
             let title = pongTitle newP
-            liftIO $ W.setWindowTitle wnd
+            GM.setWindowTitle wnd
                    $ title ++ ": " ++ show timeTaken
-                           ++ "/"  ++ show totalTime
+                           ++ "ms/"  ++ show totalTime
+                           ++ "ms"
+            liftIO $ print newP
             return newP
 
 main :: IO ()
 main = runSFML $ do
     let ctxSettings = Just $ W.ContextSettings 24 8 0 1 2
     wnd <- GM.createRenderWindow (W.VideoMode 640 480 32)
-           "Pong" [W.SFDefaultStyle] ctxSettings
+           "Pong" [W.SFDefaultStyle] ctxSettings -- [W.SFTitlebar,W.SFClose]
     rnd <- liftIO newStdGen
     runPong (PongParams (Vec2 640 480) rnd) 40 wnd
+    -- SM.sfSleep $ seconds 2
     -- void $ while_ (not . isPongOver) $ do
     --     (timeTaken,totalTime,continue) <- fpsCap_ 60 checkEvents
     --     putStrLn $ show timeTaken ++ "/" ++ show totalTime

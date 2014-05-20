@@ -1,7 +1,9 @@
 module Game.Util where
 
 import Control.Monad.SFML
-import qualified Control.Monad.SFML.System as S
+import qualified SFML.System as S
+import qualified Control.Monad.SFML.System as SM
+import Game.Vector
 
 while :: Monad m => (a -> Bool) -> a -> (a -> m a) -> m a
 while p start step = go start
@@ -21,22 +23,32 @@ while_ p step = go
                 else
                     return val
 
+
+milliseconds :: Integral a => a -> a
+milliseconds = (*1000) . abs
+
+seconds :: (RealFrac f,Integral i) => f -> i
+seconds = floor . (*1e6)
+
 fpsCap :: Int -> a -> (a -> SFML a) -> SFML (Int,Int,a)
-fpsCap fps start step = let msPerFrame = 1000 `div` fps
+fpsCap fps start step = let usPerFrame = 1000000 `div` fps
                             iConvert :: (Integral a,Num c) => a -> c
                             iConvert = fromInteger . toInteger in
     do
-        clk <- S.createClock
-        startTime <- S.getElapsedTime clk
+        clk <- SM.createClock
+        startTime <- SM.getElapsedTime clk
         next <- step start
-        endTime <- S.getElapsedTime clk
-        let desiredTime = iConvert msPerFrame
+        endTime <- SM.getElapsedTime clk
+        let desiredTime = iConvert usPerFrame
         let actualTime = endTime - startTime
         let timeLeft = max 0 $ desiredTime - actualTime
-        S.sfSleep timeLeft
-        lastTime <- S.getElapsedTime clk
-        return (iConvert actualTime,iConvert (lastTime-startTime),next)
+        SM.sfSleep timeLeft
+        lastTime <- SM.getElapsedTime clk
+        return (iConvert actualTime `div` 1000,iConvert (lastTime-startTime) `div` 1000,next)
 
 fpsCap_ :: Int -> SFML a -> SFML (Int,Int,a)
 fpsCap_ fps step = fpsCap fps undefined (const step)
+
+sfVec2f :: Vec2f -> S.Vec2f
+sfVec2f (Vec2 x y) = S.Vec2f x y
 

@@ -3,16 +3,19 @@ module Game.Pong where
 import System.Random
 
 import Game.Event (Event(..))
+import Game.Util (sfVec2f)
 import Game.Vector
 import Game.Kinematics (runKinematics)
 import Control.Monad.SFML (SFML)
 import qualified SFML.Graphics as G
-import SFML.Window (SFEvent(SFEvtClosed))
+import SFML.Window.Event
 import qualified Control.Monad.SFML.Graphics as GM
+import SFML.Graphics.Color (black,white)
 
-data Paddle = Paddle { paddleLoc :: Vec2f } deriving(Show)
+data Paddle = Paddle { paddleLoc :: Vec2f } deriving(Show,Read)
 
-data Ball = Ball { ballLoc :: Vec2f, ballVel :: Vec2f } deriving(Show)
+data Ball = Ball { ballLoc :: Vec2f, ballVel :: Vec2f }
+    deriving(Show,Read)
 
 tickBall :: Ball -> Float -> Ball
 tickBall (Ball loc vel) dt = Ball newLoc newVel
@@ -56,7 +59,7 @@ data Pong = Pong {
     pRandom :: StdGen,
 
     pDone :: Bool
-} deriving(Show)
+} deriving(Show,Read)
 
 pongRand :: (StdGen -> (a,StdGen)) -> Pong -> (a,Pong)
 pongRand f p = (r,p{pRandom=newRand})
@@ -68,33 +71,80 @@ data PongParams = PongParams {
     ppRandom :: StdGen
 }
 
-mkPong :: PongParams -> Pong
-mkPong (PongParams size@(Vec2 w h) rand)
-        = Pong size psize bsize lp rp b newRand False
+recalcSize :: Vec2f -> Pong -> Pong
+recalcSize size p = p{pScreenSize  = size,
+                      pPaddleSize  = psize,
+                      pBallSize    = bsize,
+                      pLeftPaddle  = lp,
+                      pRightPaddle = rp,
+                      pBall        = b}
     where
-        psize = Vec2 (0.1*v2x size) (0.2*v2y size)
+        psize = Vec2 pw ph
+        pw = ph/3
+        ph = 0.1 * v2y size
         bsize = Vec2 bs bs
         bs = 0.2 * v2y psize
-        lp = Paddle (Vec2 px (v2y mid))
-        rp = Paddle (Vec2 (v2x size - px) (v2y mid))
+        lp = Paddle $ Vec2 px $ v2y rescale
+                                *v2y (paddleLoc $ pLeftPaddle p)
+        rp = Paddle $ Vec2 (v2x size - px - (pw/2))
+                              $ v2y rescale
+                                *v2y (paddleLoc $ pRightPaddle p)
+        b = Ball (rescale .*. ballLoc (pBall p))
+                 (rescale .*. ballVel (pBall p))
+        (Vec2 a b) .*. (Vec2 c d) = Vec2 (a*c) (b*d)
+        rescale = Vec2 (v2x size/v2x (pScreenSize p))
+                       (v2y size/v2y (pScreenSize p))
+        px = 0.1 * v2x size
+
+mkPong :: PongParams -> Pong
+mkPong (PongParams size@(Vec2 w h) rand)
+        = recalcSize size $ Pong (Vec2 1 1) vzero vzero lp rp b newRand False
+    where
+        lp = Paddle (Vec2 0 (v2y mid))
+        rp = Paddle (Vec2 0 (v2y mid))
         b = Ball mid startVel
         (startVel,newRand) = let (theta,r1) = randomR (0,2*pi) rand
-                                 (mag,r2)   = randomR (10,30)  r1 in
+                                 (mag,r2)   = randomR (0.1,0.4)  r1 in
                              (polarVec mag theta,r2)
-        px = 0.1 * v2x size
-        mid = 0.5 *. size
+        mid = Vec2 0.5 0.5
 
 isPongOver :: Pong -> Bool
 isPongOver = pDone
 
 drawPong :: Pong -> G.RenderWindow -> SFML ()
-drawPong _ _ = return ()
+drawPong p wnd = do
+    let (Vec2 w h) = pScreenSize p
+    view <- GM.viewFromRect (G.FloatRect 0 0 w h)
+    GM.setView wnd view
+    GM.clearRenderWindow wnd black
+
+    rectShape <- GM.createRectangleShape
+    GM.setSize rectShape (sfVec2f $ pPaddleSize p)
+
+    let halfsize = 0.5 *. pPaddleSize p
+    GM.setPosition rectShape $ sfVec2f
+                    $ paddleLoc (pLeftPaddle p) -. halfsize
+    GM.drawRectangle wnd rectShape Nothing
+
+    GM.setPosition rectShape $ sfVec2f
+                    $ paddleLoc (pRightPaddle p) -. halfsize
+    GM.drawRectangle wnd rectShape Nothing
+
+    GM.setSize rectShape (sfVec2f $ pBallSize p)
+    let halfsize = 0.5 *. pBallSize p
+    GM.setPosition rectShape $ sfVec2f
+                    $ ballLoc (pBall p) -. halfsize
+    GM.drawRectangle wnd rectShape Nothing
 
 processPongEvents :: [Event] -> Pong -> Pong
 processPongEvents es p = foldl processOne p es
     where
         processOne p e = case e of
             SFEvent SFEvtClosed -> p{pDone = True}
+            SFEvent (SFEvtResized w h) ->
+                let fw = fromIntegral w
+                    fh = fromIntegral h in
+                recalcSize (Vec2 fw fh) p
             _ -> p
 
 tickPong :: Double -> Pong -> Pong
