@@ -14,7 +14,7 @@ import qualified Control.Monad.SFML.Graphics as GM
 import qualified Control.Monad.SFML.Window as WM
 import qualified Control.Monad.SFML.System as SM
 
-pongOnce :: Double -> G.RenderWindow -> Pong -> SFML Pong
+pongOnce :: Float -> G.RenderWindow -> Pong -> SFML Pong
 pongOnce dt w p = do
     input <- grabPongInput w
     let newP = (tickPong dt . processPongInput input) p
@@ -27,7 +27,7 @@ runPong params fps wnd = void $ game (mkPong params)
     where
         game init = while (not . isPongOver) init iterOnce
         iterOnce p = do
-            let dt = fromRational $ recip $ toRational fps :: Double
+            let dt = fromRational $ recip $ toRational fps :: Float
             (timeTaken,totalTime,newP) <- fpsCap fps p
                                           $ pongOnce dt wnd
             let title = pongTitle newP
