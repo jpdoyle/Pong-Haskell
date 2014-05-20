@@ -16,8 +16,8 @@ import qualified Control.Monad.SFML.System as SM
 
 pongOnce :: Double -> G.RenderWindow -> Pong -> SFML Pong
 pongOnce dt w p = do
-    events <- liftIO $ allAvailableEvents w
-    let newP = (tickPong dt . processPongEvents events) p
+    input <- grabPongInput w
+    let newP = (tickPong dt . processPongInput input) p
     drawPong newP w
     GM.display w
     return newP
