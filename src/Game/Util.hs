@@ -52,3 +52,6 @@ fpsCap_ fps step = fpsCap fps undefined (const step)
 sfVec2f :: Vec2f -> S.Vec2f
 sfVec2f (Vec2 x y) = S.Vec2f x y
 
+forceCleanup :: SFML () -> SFML ()
+forceCleanup = liftIO . runSFML
+

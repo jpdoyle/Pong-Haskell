@@ -135,7 +135,7 @@ recalcSize size p = p{pScreenSize  = size,
         bs = 0.2 * v2y psize
         lp = Paddle $ Vec2 px $ v2y rescale
                                 *v2y (paddleLoc $ pLeftPaddle p)
-        rp = Paddle $ Vec2 (v2x size - px - (pw/2))
+        rp = Paddle $ Vec2 (v2x size - px) -- - (pw/2))
                               $ v2y rescale
                                 *v2y (paddleLoc $ pRightPaddle p)
         b = Ball (rescale .*. ballLoc (pBall p))
@@ -152,6 +152,12 @@ randVec2 (low,high) rand = (polarVec mag theta,r2)
         (theta,r1) = randomR (0,2*pi) rand
         (mag,r2)   = randomR (low,high) r1
 
+randBallVel :: (Random a,Floating a) => Vec2 a -> StdGen -> (Vec2 a,StdGen)
+randBallVel v r = (v .*. rVec,r1)
+    where
+        (rVec,r1) = randVec2 (0.1,0.4) r
+        (Vec2 a b) .*. (Vec2 c d) = Vec2 (a*c) (b*d)
+
 mkPong :: PongParams -> Pong
 mkPong (PongParams size@(Vec2 w h) rand)
         = recalcSize size $ Pong (Vec2 1 1) vzero vzero lp rp b
@@ -160,7 +166,7 @@ mkPong (PongParams size@(Vec2 w h) rand)
         lp = Paddle (Vec2 0 (v2y mid))
         rp = Paddle (Vec2 0 (v2y mid))
         b = Ball mid startVel
-        (startVel,newRand) = randVec2 (0.1,0.4) rand
+        (startVel,newRand) = randBallVel (Vec2 1 1) rand
         mid = Vec2 0.5 0.5
 
 isPongOver :: Pong -> Bool
@@ -233,13 +239,27 @@ processPongInput pi p = inputDir $ foldl processOne p $ piEvents pi
             SFEvent SFEvtGainedFocus -> p{pHasFocus = True}
             _ -> p
 
-checkGoal :: Ball -> Pong -> (Ball,Maybe Side)
-checkGoal endBall p@Pong{pBall=startBall}
-        = (newBall,scoreChange)
+shiftLineToRectEdge :: Vec2f -> (Vec2f,Vec2f) -> (Vec2f,Vec2f)
+shiftLineToRectEdge size (cStart,cEnd) = (start,end)
     where
+        start = cStart +. offset
+        end = cEnd +. offset
+        offset = factor *. diff
+        factor = min xFactor yFactor
+        xFactor = abs $ v2x size / v2x diff
+        yFactor = abs $ v2y size / v2y diff
+        diff = cEnd -. cStart
+
+checkGoal :: Vec2f -> Vec2f -> Vec2f -> (Paddle,Paddle) -> Ball
+                   -> Ball -> (Ball,Maybe Float,Maybe Side)
+checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
+          startBall endBall
+        = (newBall,bounceFactor,scoreChange)
+    where
+
         newBall
-            | scored    = Ball (0.5 *. pScreenSize p) vzero
-            | bounced   = Ball bounceLoc bounceVel
+            | scored    = Ball (0.5 *. ssize) vzero
+            | bounced   = Ball bounceLoc bounceVel -- Make this recurse?
             | otherwise = endBall
         scored = case scoreChange of
                     Nothing -> False
@@ -252,31 +272,49 @@ checkGoal endBall p@Pong{pBall=startBall}
                     _ -> Nothing
         bounceVel = (1.25*vmag (ballVel startBall))
                     *.vnorm (bounceLoc -. paddleLoc bouncePaddle)
-        bounceLoc = foldr (flip fromMaybe) (ballLoc endBall)
+        bounceLoc = firstJust (ballLoc endBall)
                           [leftIntLoc,rightIntLoc]
-        bouncePaddle = if bouncedLeft then pLeftPaddle  p
-                                      else pRightPaddle p
+        bounceFactor = listToMaybe $ catMaybes [check bouncedLeft
+                                                      leftFactor,
+                                                check bouncedRight
+                                                      rightFactor]
+
+        check b m = if b then m else Nothing
+        firstJust = foldr $ flip fromMaybe
+        bouncePaddle = if bouncedLeft then leftPaddle
+                                      else rightPaddle
         bounced = bouncedLeft || bouncedRight
         bouncedLeft = bounceLeft == Just True
         bouncedRight = bounceRight == Just True
-        bounceLeft = fmap (onPaddle (pLeftPaddle p)) leftIntLoc
-        bounceRight = fmap (onPaddle (pRightPaddle p)) rightIntLoc
+        bounceLeft = fmap (onPaddle leftPaddle) leftIntLoc
+        bounceRight = fmap (onPaddle rightPaddle) rightIntLoc
         onPaddle paddle (Vec2 x y) =
             let py = v2y $ paddleLoc paddle
-                h  = v2y $ pPaddleSize p
-                bs = v2y $ pBallSize p in
-            y + 0.5*bs >= py && y - 0.5*bs <= py + h
+                h  = v2y paddleSize
+                bs = v2y ballSize in
+            y + 0.5*bs >= py - h/2 && y - 0.5*bs <= py + h/2
         leftIntLoc = fmap (interp (ballLoc startBall)
                                   (ballLoc endBall)) leftFactor
         rightIntLoc = fmap (interp (ballLoc startBall)
                                    (ballLoc endBall)) rightFactor
+
         interp start end t = start +. t *. (end -. start)
         leftFactor = ballIntersect leftLine
         rightFactor = ballIntersect rightLine
-        ballIntersect = segLineIntersect (ballLoc startBall)
-                                         (ballLoc endBall)
-        leftLine = Line (paddleLoc $ pLeftPaddle p) (Vec2 1 0)
-        rightLine = Line (paddleLoc $ pRightPaddle p) (Vec2 (-1) 0)
+        ballIntersect = segLineIntersect
+                            edgeStart
+                            edgeEnd
+        (edgeStart,edgeEnd) = shiftLineToRectEdge ballSize
+                                                  (ballLoc startBall,
+                                                   ballLoc endBall)
+        ballOffset = abs (ballSize `vdot` ballChange) *. ballChange
+        -- ballsgn = negate $ signum $ pBallSize p `vdot` ballChange
+        ballChange = ballLoc endBall -. ballLoc startBall
+        leftLine = Line (paddleLoc leftPaddle+. Vec2 (v2x paddleHalfSize) 0)
+                        (Vec2 1 0)
+        rightLine = Line (paddleLoc rightPaddle-. Vec2 (v2x paddleHalfSize) 0)
+                        (Vec2 (-1) 0)
+        paddleHalfSize = 0.5 *. paddleSize
 
 tickPong :: Float -> Pong -> Pong
 tickPong dt p@Pong{pScreenSize=ssize,
@@ -286,11 +324,19 @@ tickPong dt p@Pong{pScreenSize=ssize,
                    pLeftPaddle=lPaddle,
                    pRightPaddle=rPaddle,
                    pLeftDir=ldir,
-                   pRightDir=rdir} = p{pBall=newBall,
-                                       pLeftPaddle=newLPaddle,
-                                       pRightPaddle=newRPaddle}
+                   pRightDir=rdir,
+                   pRandom=rand} = p{pBall=newBall,
+                                     pLeftPaddle=newLPaddle,
+                                     pRightPaddle=newRPaddle,
+                                     pRandom=newRand}
     where
-        newBall = boundBall vzero ssize (v2x bsize) $ tickBall dt ball
+        (newBall,newRand) = case score of
+            Nothing -> (scoredBall,rand)
+            _ -> let (vel,r) = randBallVel ssize rand in
+                 (scoredBall{ballVel=vel},r)
+        (scoredBall,_,score) = checkGoal ssize psize bsize
+                                         (lPaddle,rPaddle) ball ball1
+        ball1 = boundBall vzero ssize (v2x bsize) $ tickBall dt ball
         newLPaddle = boundPaddle 0 h (v2y psize)
                      $ tickPaddle ldir h dt lPaddle
         newRPaddle = boundPaddle 0 h (v2y psize)
