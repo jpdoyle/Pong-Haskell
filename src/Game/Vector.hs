@@ -39,7 +39,13 @@ vnorm v = recip (vmag v) *. v
 vproject :: (Vector a v,Fractional a) => v -> v -> v
 vproject u v  = ((u `vdot` v)/(v `vdot` v)) *. v
 
+class CartesianVec v where
+    (.*.) :: v -> v -> v
+
 data Vec2 a = Vec2 { v2x :: a,v2y :: a } deriving(Show,Read)
+
+instance Num a => CartesianVec (Vec2 a) where
+    (Vec2 ux uy) .*. (Vec2 vx vy) = Vec2 (ux*vx) (uy*vy)
 
 type Vec2i = Vec2 Int
 type Vec2f = Vec2 Float

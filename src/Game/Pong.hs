@@ -4,8 +4,9 @@ import System.Random
 
 import Control.Monad
 import Data.Maybe
+import Data.Functor
 import Game.Event
-import Game.Util (sfVec2f)
+import Game.Util (sfVec2f,forceCleanup)
 import Game.Vector
 import Game.Kinematics (runKinematics)
 import Control.Monad.SFML (SFML)
@@ -25,8 +26,8 @@ inward low range def x
     | x > low+range = -1
     | otherwise     = def
 
-data Direction = Up | Down | Stop deriving(Show,Read)
-data Side = LeftSide | RightSide deriving(Show,Read)
+data Direction = Up | Down | Stop deriving(Show,Read,Eq)
+data Side = LeftSide | RightSide deriving(Show,Read,Eq)
 
 dirToSignum :: Num a => Direction -> a
 dirToSignum d = case d of
@@ -101,6 +102,7 @@ data Pong = Pong {
     pBall        :: Ball,
 
     pLeftDir,pRightDir :: Direction,
+    pLeftScore,pRightScore :: Int,
     pHasFocus :: Bool,
 
     pRandom :: StdGen,
@@ -117,6 +119,11 @@ pongRand f p = (r,p{pRandom=newRand})
 data PongParams = PongParams {
     ppScreenSize :: Vec2f,
     ppRandom :: StdGen
+}
+
+data PongContext = PongContext {
+    pcWin :: G.RenderWindow,
+    pcFont :: G.Font
 }
 
 recalcSize :: Vec2f -> Pong -> Pong
@@ -139,7 +146,6 @@ recalcSize size p = p{pScreenSize  = size,
                                 *v2y (paddleLoc $ pRightPaddle p)
         b = Ball (rescale .*. ballLoc (pBall p))
                  (rescale .*. ballVel (pBall p))
-        (Vec2 a b) .*. (Vec2 c d) = Vec2 (a*c) (b*d)
         rescale = Vec2 (v2x size/v2x (pScreenSize p))
                        (v2y size/v2y (pScreenSize p))
         px = 0.1 * v2x size
@@ -159,12 +165,11 @@ randBallVel v r = (v .*. rVec,r3)
         (flip,r3) = random r2
         (theta,r2) = randomR (-pi/4,pi/4) r1
         (mag,r1) = randomR (0.2,0.4) r
-        (Vec2 a b) .*. (Vec2 c d) = Vec2 (a*c) (b*d)
 
 mkPong :: PongParams -> Pong
 mkPong (PongParams size@(Vec2 w h) rand)
         = recalcSize size $ Pong (Vec2 1 1) vzero vzero lp rp b
-                                 Stop Stop True newRand Nothing False
+                                 Stop Stop 0 0 True newRand Nothing False
     where
         lp = Paddle (Vec2 0 (v2y mid))
         rp = Paddle (Vec2 0 (v2y mid))
@@ -175,12 +180,69 @@ mkPong (PongParams size@(Vec2 w h) rand)
 isPongOver :: Pong -> Bool
 isPongOver = pDone
 
-drawPong :: Pong -> G.RenderWindow -> SFML ()
-drawPong p wnd = do
+dashedLine :: (Vec2f,Vec2f) -> Float -> [W.Vec2f]
+dashedLine (p1,p2) dashLen = verts
+    where
+        verts = take (nSegs*2) $ sfVec2f
+                               <$> (makeDash
+                                    =<< iterate (+. step) init)
+        makeDash v = [v,v+.dash]
+        step = stepLen *. vnorm diff
+        dash = dashLen *. vnorm diff
+        init = p1 +. ((1/6+initFact/2)*stepLen) *. vnorm diff
+        (nSegs,initFact) = properFraction $ vmag diff / stepLen
+        stepLen = dashLen*1.5
+        diff = p2 -. p1
+
+setVAContents :: G.VertexArray -> [G.Vertex] -> SFML ()
+setVAContents va vs = do
+    GM.clearVA va
+    sequence_ $ GM.appendVA va <$> vs
+
+drawScores :: (Int,Int) -> PongContext -> SFML ()
+drawScores (l,r) (PongContext wnd fnt) = do
+    (W.Vec2f w h) <- GM.getViewSize =<< GM.getView wnd
+    let mid = w/2
+    let (lx,rx) = (0.8*mid,1.2*mid)
+    let y = negate $ 0.01*h -- .001*h
+    txt <- GM.createText
+    GM.setTextFont txt fnt
+    GM.setTextCharacterSize txt $ fromIntegral $ floor (0.1*h)
+    let (lText,rText) = (show l,show r)
+
+    GM.setTextString txt lText
+    (G.FloatRect _ _ tw th) <- GM.getTextLocalBounds txt
+    GM.setOrigin txt (W.Vec2f tw 0)
+    GM.setPosition txt $ W.Vec2f lx y
+    GM.drawText wnd txt Nothing
+
+    GM.setTextString txt rText
+    (G.FloatRect _ _ tw th) <- GM.getTextLocalBounds txt
+    GM.setOrigin txt (W.Vec2f tw 0)
+    GM.setPosition txt $ W.Vec2f rx y
+    GM.drawText wnd txt Nothing
+
+drawMidLine :: G.RenderWindow -> SFML ()
+drawMidLine wnd = do
+    (W.Vec2f w h) <- GM.getViewSize =<< GM.getView wnd
+    let mid = w/2
+    va <- GM.createVA
+    GM.setPrimitiveType va G.Lines
+    setVAContents va
+                     $ (\p -> G.Vertex p white (W.Vec2f 0 0))
+                     <$> dashedLine (Vec2 mid 0,Vec2 mid h) 80
+    GM.drawVertexArray wnd va Nothing
+
+drawPong :: Pong -> PongContext -> SFML ()
+drawPong p ctx@(PongContext wnd fnt) = forceCleanup $ do
     let (Vec2 w h) = pScreenSize p
     view <- GM.viewFromRect (G.FloatRect 0 0 w h)
     GM.setView wnd view
     GM.clearRenderWindow wnd black
+
+    drawScores (pLeftScore p,pRightScore p) ctx
+
+    drawMidLine wnd
 
     rectShape <- GM.createRectangleShape
     GM.setSize rectShape (sfVec2f $ pPaddleSize p)
@@ -254,7 +316,17 @@ shiftLineToEdgeOnAxis axis size (cStart,cEnd) = (start,end)
         axisSize = vmag $ (0.5*.size) `vproject` axis
         diff = cEnd -. cStart
 
-checkGoal :: Vec2f -> Vec2f -> Vec2f -> (Paddle,Paddle) -> Ball -> Ball -> (Ball,Maybe Float,Maybe Side)
+restrainTo60deg :: Vec2f -> Vec2f
+restrainTo60deg v = if tooVert then corrected else v
+    where
+        -- tan(60 deg) = sqrt(3) = 0.8660254
+        tooVert = abs (tangent v) > 0.8660254
+        corrected = vmag v *. (vsgn v .*. Vec2 0.5 0.8660254)
+        tangent v = v2y v / v2x v
+        vsgn (Vec2 x y) = Vec2 (signum x) (signum y)
+
+checkGoal :: Vec2f -> Vec2f -> Vec2f -> (Paddle,Paddle) -> Ball
+                   -> Ball -> (Ball,Maybe Float,Maybe Side)
 checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
           startBall endBall
         = (newBall,bounceFactor,scoreChange)
@@ -262,7 +334,9 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
 
         newBall
             | scored    = Ball (0.5 *. ssize) vzero
-            | bounced   = Ball bounceLoc bounceVel -- Make this recurse?
+            | bounced   = Ball bounceLoc bounceVel -- Make this finish
+                                                   -- the frame's
+                                                   -- interpolation?
             | otherwise = endBall
         scored = case scoreChange of
                     Nothing -> False
@@ -273,8 +347,10 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
             _ -> case bounceRight of
                     Just False -> Just RightSide
                     _ -> Nothing
-        bounceVel = (1.25*vmag (ballVel startBall))
-                    *.vnorm (bounceLoc -. paddleLoc bouncePaddle)
+        -- prevents bounces from being too vertical
+        bounceVel = restrainTo60deg bounceVelInit
+        bounceVelInit = (1.1*vmag (ballVel startBall))
+                         *.vnorm (bounceLoc -. paddleLoc bouncePaddle)
         bounceLoc = maybe (ballLoc endBall)
                           (interp (ballLoc startBall)
                                   (ballLoc endBall))
@@ -332,9 +408,13 @@ tickPong dt p@Pong{pScreenSize=ssize,
                    pRightPaddle=rPaddle,
                    pLeftDir=ldir,
                    pRightDir=rdir,
+                   pLeftScore=lscore,
+                   pRightScore=rscore,
                    pRandom=rand} = p{pBall=newBall,
                                      pLeftPaddle=newLPaddle,
                                      pRightPaddle=newRPaddle,
+                                     pLeftScore=newLScore,
+                                     pRightScore=newRScore,
                                      pRandom=newRand,
                                      pFactor = fact}
     where
@@ -342,6 +422,10 @@ tickPong dt p@Pong{pScreenSize=ssize,
             Nothing -> (scoredBall,rand)
             _ -> let (vel,r) = randBallVel ssize rand in
                  (scoredBall{ballVel=vel},r)
+        newLScore = if score == Just LeftSide  then lscore+1
+                                               else lscore
+        newRScore = if score == Just RightSide then rscore+1
+                                               else rscore
         (scoredBall,fact,score) = checkGoal ssize psize bsize
                                          (lPaddle,rPaddle) ball ball1
         ball1 = boundBall vzero ssize (v2x bsize) $ tickBall dt ball

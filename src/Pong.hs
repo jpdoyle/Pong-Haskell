@@ -8,6 +8,7 @@ import Game.Vector
 import Game.Util
 import Game.Event
 import Game.Pong
+import Paths_Pong (getDataFileName)
 import Control.Monad.SFML
 import qualified SFML.Graphics as G
 import qualified SFML.Window as W
@@ -15,22 +16,23 @@ import qualified Control.Monad.SFML.Graphics as GM
 import qualified Control.Monad.SFML.Window as WM
 import qualified Control.Monad.SFML.System as SM
 
-pongOnce :: Float -> G.RenderWindow -> Pong -> SFML Pong
-pongOnce dt w p = do
+pongOnce :: Float -> PongContext -> Pong -> SFML Pong
+pongOnce dt ctx@(PongContext w _) p = do
     input <- grabPongInput w
     let newP = (tickPong dt . processPongInput input) p
-    drawPong newP w
+    drawPong newP ctx
     GM.display w
     return newP
 
-runPong :: PongParams -> Int -> G.RenderWindow -> SFML ()
-runPong params fps wnd = void $ game (mkPong params)
+runPong :: PongParams -> Int -> PongContext -> SFML ()
+runPong params fps ctx@(PongContext wnd fnt) = void
+                                                $ game (mkPong params)
     where
         game init = while (not . isPongOver) init iterOnce
         iterOnce p = do
             let dt = fromRational $ recip $ toRational fps :: Float
             (timeTaken,totalTime,newP) <- fpsCap fps p
-                                          $ pongOnce dt wnd
+                                          $ pongOnce dt ctx
             let title = pongTitle newP
             GM.setWindowTitle wnd
                    $ title ++ ": " ++ show timeTaken
@@ -50,8 +52,10 @@ main = runSFML $ do
     let ctxSettings = Just $ W.ContextSettings 24 8 0 1 2
     wnd <- GM.createRenderWindow (W.VideoMode 640 480 32)
            "Pong" [W.SFDefaultStyle] ctxSettings -- [W.SFTitlebar,W.SFClose]
+    fntPath <- liftIO $ getDataFileName "MAG.ttf"
+    fnt <- GM.fontFromFile fntPath
     rnd <- liftIO newStdGen
-    runPong (PongParams (Vec2 640 480) rnd) 40 wnd
+    runPong (PongParams (Vec2 640 480) rnd) 40 (PongContext wnd fnt)
     -- SM.sfSleep $ seconds 2
     -- void $ while_ (not . isPongOver) $ do
     --     (timeTaken,totalTime,continue) <- fpsCap_ 60 checkEvents
