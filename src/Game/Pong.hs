@@ -78,12 +78,10 @@ segLineIntersect p1 p2 (Line point normal) = intersect
         intersect = do
             let relP1 = p1 -. point
                 relP2 = p2 -. point
-            -- If one endpoint is within 90 degrees of the normal and
-            -- the other is not, they intersect
-            if (relP1 `vdot` normal)*(relP2 `vdot` normal) <= 0 then
-                Just ()
-            else
-                Nothing
+            -- If both endpoints are within 90 degrees of the normal, they do
+            -- not intersect.
+            when ((relP1 `vdot` normal)*(relP2 `vdot` normal) > 0)
+                 Nothing
             -- Define the segment as p = p1 + (p2-p1)*t, 0 <= t <= 1
             let diff = p2 -. p1
             -- (p - point) `dot` normal = 0 at intersection
@@ -106,6 +104,7 @@ data Pong = Pong {
     pHasFocus :: Bool,
 
     pRandom :: StdGen,
+    pFactor :: Maybe Float,
 
     pDone :: Bool
 } deriving(Show,Read)
@@ -152,16 +151,20 @@ randVec2 (low,high) rand = (polarVec mag theta,r2)
         (theta,r1) = randomR (0,2*pi) rand
         (mag,r2)   = randomR (low,high) r1
 
-randBallVel :: (Random a,Floating a) => Vec2 a -> StdGen -> (Vec2 a,StdGen)
-randBallVel v r = (v .*. rVec,r1)
+randBallVel :: (Random a,Floating a) =>
+               Vec2 a -> StdGen -> (Vec2 a,StdGen)
+randBallVel v r = (v .*. rVec,r3)
     where
-        (rVec,r1) = randVec2 (0.1,0.4) r
+        rVec = polarVec mag (theta + (if flip then 180 else 0))
+        (flip,r3) = random r2
+        (theta,r2) = randomR (-pi/4,pi/4) r1
+        (mag,r1) = randomR (0.2,0.4) r
         (Vec2 a b) .*. (Vec2 c d) = Vec2 (a*c) (b*d)
 
 mkPong :: PongParams -> Pong
 mkPong (PongParams size@(Vec2 w h) rand)
         = recalcSize size $ Pong (Vec2 1 1) vzero vzero lp rp b
-                                 Stop Stop True newRand False
+                                 Stop Stop True newRand Nothing False
     where
         lp = Paddle (Vec2 0 (v2y mid))
         rp = Paddle (Vec2 0 (v2y mid))
@@ -239,19 +242,19 @@ processPongInput pi p = inputDir $ foldl processOne p $ piEvents pi
             SFEvent SFEvtGainedFocus -> p{pHasFocus = True}
             _ -> p
 
-shiftLineToRectEdge :: Vec2f -> (Vec2f,Vec2f) -> (Vec2f,Vec2f)
-shiftLineToRectEdge size (cStart,cEnd) = (start,end)
+shiftLineToEdgeOnAxis :: Vec2f -> Vec2f
+                               -> (Vec2f,Vec2f) -> (Vec2f,Vec2f)
+shiftLineToEdgeOnAxis axis size (cStart,cEnd) = (start,end)
     where
         start = cStart +. offset
         end = cEnd +. offset
         offset = factor *. diff
-        factor = min xFactor yFactor
-        xFactor = abs $ v2x size / v2x diff
-        yFactor = abs $ v2y size / v2y diff
+        factor = axisSize / axisDiff
+        axisDiff = vmag $ diff `vproject` axis
+        axisSize = vmag $ (0.5*.size) `vproject` axis
         diff = cEnd -. cStart
 
-checkGoal :: Vec2f -> Vec2f -> Vec2f -> (Paddle,Paddle) -> Ball
-                   -> Ball -> (Ball,Maybe Float,Maybe Side)
+checkGoal :: Vec2f -> Vec2f -> Vec2f -> (Paddle,Paddle) -> Ball -> Ball -> (Ball,Maybe Float,Maybe Side)
 checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
           startBall endBall
         = (newBall,bounceFactor,scoreChange)
@@ -272,8 +275,10 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
                     _ -> Nothing
         bounceVel = (1.25*vmag (ballVel startBall))
                     *.vnorm (bounceLoc -. paddleLoc bouncePaddle)
-        bounceLoc = firstJust (ballLoc endBall)
-                          [leftIntLoc,rightIntLoc]
+        bounceLoc = maybe (ballLoc endBall)
+                          (interp (ballLoc startBall)
+                                  (ballLoc endBall))
+                          bounceFactor
         bounceFactor = listToMaybe $ catMaybes [check bouncedLeft
                                                       leftFactor,
                                                 check bouncedRight
@@ -304,9 +309,11 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
         ballIntersect = segLineIntersect
                             edgeStart
                             edgeEnd
-        (edgeStart,edgeEnd) = shiftLineToRectEdge ballSize
-                                                  (ballLoc startBall,
-                                                   ballLoc endBall)
+        (edgeStart,edgeEnd) = shiftLineToEdgeOnAxis
+                                    (Vec2 1 0)
+                                    ballSize
+                                    (ballLoc startBall,
+                                     ballLoc endBall)
         ballOffset = abs (ballSize `vdot` ballChange) *. ballChange
         -- ballsgn = negate $ signum $ pBallSize p `vdot` ballChange
         ballChange = ballLoc endBall -. ballLoc startBall
@@ -328,13 +335,14 @@ tickPong dt p@Pong{pScreenSize=ssize,
                    pRandom=rand} = p{pBall=newBall,
                                      pLeftPaddle=newLPaddle,
                                      pRightPaddle=newRPaddle,
-                                     pRandom=newRand}
+                                     pRandom=newRand,
+                                     pFactor = fact}
     where
         (newBall,newRand) = case score of
             Nothing -> (scoredBall,rand)
             _ -> let (vel,r) = randBallVel ssize rand in
                  (scoredBall{ballVel=vel},r)
-        (scoredBall,_,score) = checkGoal ssize psize bsize
+        (scoredBall,fact,score) = checkGoal ssize psize bsize
                                          (lPaddle,rPaddle) ball ball1
         ball1 = boundBall vzero ssize (v2x bsize) $ tickBall dt ball
         newLPaddle = boundPaddle 0 h (v2y psize)

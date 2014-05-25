@@ -55,3 +55,6 @@ instance Num a => Vector a (Vec2 a) where
     vscale s (Vec2 x y) = Vec2 (s*x) (s*y)
     vdot (Vec2 a b) (Vec2 c d) = (a*c) + (b*d)
 
+instance Eq a => Eq (Vec2 a) where
+    (Vec2 x1 y1) == (Vec2 x2 y2) = (x1 == y1) && (x2 == y2)
+

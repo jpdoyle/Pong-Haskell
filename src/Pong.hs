@@ -2,6 +2,7 @@
 module Main where
 
 import Control.Monad
+import Data.Maybe (isJust)
 import System.Random (newStdGen)
 import Game.Vector
 import Game.Util
@@ -35,7 +36,13 @@ runPong params fps wnd = void $ game (mkPong params)
                    $ title ++ ": " ++ show timeTaken
                            ++ "ms/"  ++ show totalTime
                            ++ "ms"
-            liftIO $ print newP
+            when (isJust $ pFactor newP) $
+                liftIO $ do
+                    print "BOUNCE"
+                    print p
+                    print $ pFactor newP
+                    print newP
+                    print "DONE BOUNCE"
             return newP
 
 main :: IO ()
