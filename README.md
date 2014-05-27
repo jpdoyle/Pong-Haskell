@@ -16,7 +16,7 @@ project:
 Playing
 -------
 
-The game starts paused (<Space> toggles this). The left paddle is
+The game starts paused (\<Space\> toggles this). The left paddle is
 controlled with W/S, the right with Up/Down. The ball bounces
 differently depending on where it hits the paddle, and speeds up with
 each bounce. There currently is no winning score, so play forever or
