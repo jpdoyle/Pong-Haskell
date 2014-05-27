@@ -13,6 +13,12 @@ project:
     $ cabal configure
     $ cabal run
 
+You will need [SFML-Haskell](https://github.com/SFML-haskell/SFML) and
+[SFML-Control](https://github.com/SFML-haskell/SFML-control) to
+compile this, and the [CSFML](http://www.sfml-dev.org/download/csfml/)
+library to link and run it. Cabal can install any other necessary
+libraries.
+
 Playing
 -------
 

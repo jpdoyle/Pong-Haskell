@@ -342,9 +342,9 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
                     _       -> True
         scoreChange = case bounceLeft of
             Just True  -> Nothing
-            Just False -> Just LeftSide
+            Just False -> Just RightSide
             _ -> case bounceRight of
-                    Just False -> Just RightSide
+                    Just False -> Just LeftSide
                     _ -> Nothing
         -- prevents bounces from being too vertical
         bounceVel = restrainTo60deg bounceVelInit
