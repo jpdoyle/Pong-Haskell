@@ -38,13 +38,13 @@ runPong params fps ctx@(PongContext wnd fnt) = void
                    $ title ++ ": " ++ show timeTaken
                            ++ "ms/"  ++ show totalTime
                            ++ "ms"
-            when (isJust $ pFactor newP) $
-                liftIO $ do
-                    print "BOUNCE"
-                    print p
-                    print $ pFactor newP
-                    print newP
-                    print "DONE BOUNCE"
+            -- when (isJust $ pFactor newP) $
+            --     liftIO $ do
+            --         print "BOUNCE"
+            --         print p
+            --         print $ pFactor newP
+            --         print newP
+            --         print "DONE BOUNCE"
             return newP
 
 main :: IO ()

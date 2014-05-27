@@ -108,6 +108,7 @@ data Pong = Pong {
     pRandom :: StdGen,
     pFactor :: Maybe Float,
 
+    pRunning :: Bool,
     pDone :: Bool
 } deriving(Show,Read)
 
@@ -150,18 +151,12 @@ recalcSize size p = p{pScreenSize  = size,
                        (v2y size/v2y (pScreenSize p))
         px = 0.1 * v2x size
 
-randVec2 :: (Random a,Floating a) => (a,a) -> StdGen
-                                           -> (Vec2 a,StdGen)
-randVec2 (low,high) rand = (polarVec mag theta,r2)
-    where
-        (theta,r1) = randomR (0,2*pi) rand
-        (mag,r2)   = randomR (low,high) r1
-
 randBallVel :: (Random a,Floating a) =>
                Vec2 a -> StdGen -> (Vec2 a,StdGen)
-randBallVel v r = (v .*. rVec,r3)
+randBallVel v r = (v .*. Vec2 x y,r3)
     where
-        rVec = polarVec mag (theta + (if flip then 180 else 0))
+        x =  if flip then negate x' else x'
+        (Vec2 x' y) = polarVec mag theta
         (flip,r3) = random r2
         (theta,r2) = randomR (-pi/4,pi/4) r1
         (mag,r1) = randomR (0.2,0.4) r
@@ -169,7 +164,8 @@ randBallVel v r = (v .*. rVec,r3)
 mkPong :: PongParams -> Pong
 mkPong (PongParams size@(Vec2 w h) rand)
         = recalcSize size $ Pong (Vec2 1 1) vzero vzero lp rp b
-                                 Stop Stop 0 0 True newRand Nothing False
+                                 Stop Stop 0 0 True newRand Nothing
+                                 False False
     where
         lp = Paddle (Vec2 0 (v2y mid))
         rp = Paddle (Vec2 0 (v2y mid))
@@ -300,8 +296,11 @@ processPongInput pi p = inputDir $ foldl processOne p $ piEvents pi
                 let fw = fromIntegral w
                     fh = fromIntegral h in
                 recalcSize (Vec2 fw fh) p
-            SFEvent SFEvtLostFocus -> p{pHasFocus = False}
-            SFEvent SFEvtGainedFocus -> p{pHasFocus = True}
+            SFEvent SFEvtLostFocus -> p{pRunning = False}
+            -- SFEvent SFEvtGainedFocus -> p{pHasFocus = True}
+            SFEvent (SFEvtKeyPressed{code=key}) -> case key of
+                W.KeySpace -> p{pRunning=not $ pRunning p}
+                _ -> p
             _ -> p
 
 shiftLineToEdgeOnAxis :: Vec2f -> Vec2f
@@ -400,6 +399,7 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
         paddleHalfSize = 0.5 *. paddleSize
 
 tickPong :: Float -> Pong -> Pong
+tickPong _ p@Pong{pRunning=False} = p
 tickPong dt p@Pong{pScreenSize=ssize,
                    pPaddleSize=psize,
                    pBallSize=bsize,
