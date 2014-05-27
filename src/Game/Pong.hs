@@ -159,7 +159,7 @@ randBallVel v r = (v .*. Vec2 x y,r3)
         (Vec2 x' y) = polarVec mag theta
         (flip,r3) = random r2
         (theta,r2) = randomR (-pi/4,pi/4) r1
-        (mag,r1) = randomR (0.2,0.4) r
+        (mag,r1) = randomR (0.1,0.1) r -- (0.2,0.4) r
 
 mkPong :: PongParams -> Pong
 mkPong (PongParams size@(Vec2 w h) rand)
@@ -340,12 +340,11 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
         scored = case scoreChange of
                     Nothing -> False
                     _       -> True
-        scoreChange = case bounceLeft of
-            Just True  -> Nothing
-            Just False -> Just RightSide
-            _ -> case bounceRight of
-                    Just False -> Just LeftSide
-                    _ -> Nothing
+        scoreChange = if bounced then Nothing
+                      else case drop 4 bounces of
+                        [Nothing,Nothing] -> Nothing
+                        [Nothing,_]       -> Just LeftSide
+                        _                 -> Just RightSide
         -- prevents bounces from being too vertical
         bounceVel = restrainTo60deg bounceVelInit
         bounceVelInit = (1.1*vmag (ballVel startBall))
@@ -354,36 +353,47 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
                           (interp (ballLoc startBall)
                                   (ballLoc endBall))
                           bounceFactor
-        bounceFactor = listToMaybe $ catMaybes [check bouncedLeft
-                                                      leftFactor,
-                                                check bouncedRight
-                                                      rightFactor]
+        bounceFactor = listToMaybe $ catMaybes
+                                   $ zipWith check bounceds factors
 
         check b m = if b then m else Nothing
         firstJust = foldr $ flip fromMaybe
-        bouncePaddle = if bouncedLeft then leftPaddle
-                                      else rightPaddle
-        bounced = bouncedLeft || bouncedRight
-        bouncedLeft = bounceLeft == Just True
-        bouncedRight = bounceRight == Just True
-        bounceLeft = fmap (onPaddle leftPaddle) leftIntLoc
-        bounceRight = fmap (onPaddle rightPaddle) rightIntLoc
+        bouncePaddle = snd $ head $ filter fst
+                           $ zip bounceds paddles
+        bounced = or bounceds
+        bounceds = map (==Just True) bounces
+        bounces = zipWith (fmap . onPaddle) paddles intLocs
+        paddles = [leftPaddle,rightPaddle,
+                   leftPaddle,rightPaddle,
+                   leftPaddle,rightPaddle]
         onPaddle paddle (Vec2 x y) =
             let py = v2y $ paddleLoc paddle
                 h  = v2y paddleSize
                 bs = v2y ballSize in
             y + 0.5*bs >= py - h/2 && y - 0.5*bs <= py + h/2
-        leftIntLoc = fmap (interp (ballLoc startBall)
-                                  (ballLoc endBall)) leftFactor
-        rightIntLoc = fmap (interp (ballLoc startBall)
-                                   (ballLoc endBall)) rightFactor
+        intLocs = map (fmap $ interp (ballLoc startBall) (ballLoc endBall))
+                      factors
 
         interp start end t = start +. t *. (end -. start)
-        leftFactor = ballIntersect leftLine
-        rightFactor = ballIntersect rightLine
-        ballIntersect = segLineIntersect
-                            edgeStart
-                            edgeEnd
+        factors = zipWith ($) [edgeIntersect,edgeIntersect,
+                               onLeftFact,onRightFact,
+                               centerIntersect,centerIntersect]
+                              [leftPaddleLine,rightPaddleLine,
+                               undefined,undefined,
+                               leftLine,rightLine]
+        onLeftFact = let (Vec2 bx _) = ballLoc endBall -. 0.5*.ballSize
+                         (Vec2 bvx _) = ballVel startBall
+                         (Vec2 px _) = paddleLoc leftPaddle
+                                       +. paddleHalfSize in
+                     const (if bvx < 0 && bx < px then Just 1 else Nothing)
+        onRightFact = let (Vec2 bx _) = ballLoc endBall +. 0.5*.ballSize
+                          (Vec2 bvx _) = ballVel startBall
+                          (Vec2 px _) = paddleLoc rightPaddle
+                                        -. paddleHalfSize in
+                      const (if bvx > 0 && bx > px then Just 1 else Nothing)
+        centerIntersect = segLineIntersect (ballLoc startBall)
+                                           (ballLoc endBall)
+        edgeIntersect = segLineIntersect edgeStart edgeEnd
         (edgeStart,edgeEnd) = shiftLineToEdgeOnAxis
                                     (Vec2 1 0)
                                     ballSize
@@ -392,10 +402,14 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
         ballOffset = abs (ballSize `vdot` ballChange) *. ballChange
         -- ballsgn = negate $ signum $ pBallSize p `vdot` ballChange
         ballChange = ballLoc endBall -. ballLoc startBall
-        leftLine = Line (paddleLoc leftPaddle+. Vec2 (v2x paddleHalfSize) 0)
-                        (Vec2 1 0)
-        rightLine = Line (paddleLoc rightPaddle-. Vec2 (v2x paddleHalfSize) 0)
-                        (Vec2 (-1) 0)
+        leftPaddleLine = Line (paddleLoc leftPaddle
+                               +. Vec2 (v2x paddleHalfSize) 0)
+                              (Vec2 1 0)
+        leftLine = Line (paddleLoc leftPaddle) (Vec2 1 0)
+        rightPaddleLine = Line (paddleLoc rightPaddle
+                                -. Vec2 (v2x paddleHalfSize) 0)
+                               (Vec2 (-1) 0)
+        rightLine = Line (paddleLoc rightPaddle) (Vec2 (-1) 0)
         paddleHalfSize = 0.5 *. paddleSize
 
 tickPong :: Float -> Pong -> Pong
