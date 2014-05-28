@@ -159,7 +159,7 @@ randBallVel v r = (v .*. Vec2 x y,r3)
         (Vec2 x' y) = polarVec mag theta
         (flip,r3) = random r2
         (theta,r2) = randomR (-pi/4,pi/4) r1
-        (mag,r1) = randomR (0.1,0.1) r -- (0.2,0.4) r
+        (mag,r1) = randomR (0.2,0.4) r -- (0.2,0.4) r
 
 mkPong :: PongParams -> Pong
 mkPong (PongParams size@(Vec2 w h) rand)
