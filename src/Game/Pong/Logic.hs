@@ -46,10 +46,10 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
                     Nothing -> False
                     _       -> True
         scoreChange
-            | v2x (ballLoc endBall) - v2x ballSize
-               < v2x (paddleLoc leftPaddle) = Just RightSide
-            | v2x (ballLoc endBall) + v2x ballSize
-               > v2x (paddleLoc rightPaddle) = Just LeftSide
+            | v2x (ballLoc endBall) < v2x (paddleLoc leftPaddle)
+                = Just RightSide
+            | v2x (ballLoc endBall) > v2x (paddleLoc rightPaddle)
+                = Just LeftSide
             | bounced   = Nothing
             | otherwise = case drop 4 bounces of
                 [Nothing,Nothing] -> Nothing
