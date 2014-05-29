@@ -28,3 +28,11 @@ differently depending on where it hits the paddle, and speeds up with
 each bounce. There currently is no winning score, so play forever or
 until you're bored!
 
+Screenshots
+-----------
+
+![1](/../screenshots/screenshots/1.png)
+![4](/../screenshots/screenshots/4.png)
+![6](/../screenshots/screenshots/6.png)
+![9](/../screenshots/screenshots/9.png)
+
