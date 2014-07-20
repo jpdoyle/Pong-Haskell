@@ -50,7 +50,7 @@ fpsCap_ :: Int -> SFML a -> SFML (Int,Int,a)
 fpsCap_ fps step = fpsCap fps undefined (const step)
 
 sfVec2f :: Vec2f -> S.Vec2f
-sfVec2f (Vec2 x y) = S.Vec2f x y
+sfVec2f (x,y) = S.Vec2f x y
 
 forceCleanup :: SFML () -> SFML ()
 forceCleanup = liftIO . runSFML

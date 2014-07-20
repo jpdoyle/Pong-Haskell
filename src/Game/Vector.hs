@@ -42,25 +42,25 @@ vproject u v  = ((u `vdot` v)/(v `vdot` v)) *. v
 class CartesianVec v where
     (.*.) :: v -> v -> v
 
-data Vec2 a = Vec2 { v2x :: a,v2y :: a } deriving(Show,Read)
+type Vec2 a = (a,a);
 
 instance Num a => CartesianVec (Vec2 a) where
-    (Vec2 ux uy) .*. (Vec2 vx vy) = Vec2 (ux*vx) (uy*vy)
+    (ux,uy) .*. (vx,vy) = (ux*vx,uy*vy)
 
 type Vec2i = Vec2 Int
 type Vec2f = Vec2 Float
 type Vec2d = Vec2 Double
 
 polarVec :: Floating a => a -> a -> Vec2 a
-polarVec r theta = Vec2 (r*cos theta) (r*sin theta)
+polarVec r theta = (r*cos theta,r*sin theta)
 
 instance Num a => Vector a (Vec2 a) where
-    vplus (Vec2 a b) (Vec2 c d) = Vec2 (a+c) (b+d)
-    vnegate (Vec2 x y) = Vec2 (negate x) (negate y)
-    vzero = Vec2 0 0
-    vscale s (Vec2 x y) = Vec2 (s*x) (s*y)
-    vdot (Vec2 a b) (Vec2 c d) = (a*c) + (b*d)
+    vplus (a,b) (c,d) = (a+c,b+d)
+    vnegate (x,y) = (negate x,negate y)
+    vzero = (0,0)
+    vscale s (x,y) = (s*x,s*y)
+    vdot (a,b) (c,d) = (a*c) + (b*d)
 
 instance Eq a => Eq (Vec2 a) where
-    (Vec2 x1 y1) == (Vec2 x2 y2) = (x1 == y1) && (x2 == y2)
+    (x1,y1) == (x2,y2) = (x1 == y1) && (x2 == y2)
 

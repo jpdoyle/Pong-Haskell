@@ -27,12 +27,12 @@ dirToSignum d = case d of
 data Paddle = Paddle { paddleLoc :: Vec2f } deriving(Show,Read)
 
 boundPaddle :: Float -> Float -> Float -> Paddle -> Paddle
-boundPaddle low height ph (Paddle (Vec2 x y)) = Paddle (Vec2 x y')
+boundPaddle low height ph (Paddle (x,y)) = Paddle (x,y')
     where
         y' = bound (low+ph/2) (height-ph) y
 
 tickPaddle :: Direction -> Float -> Float -> Paddle -> Paddle
-tickPaddle d h dt (Paddle loc) = Paddle $ loc +. (dt *. Vec2 0 vy)
+tickPaddle d h dt (Paddle loc) = Paddle $ loc +. (dt *. (0,vy))
     where
         vy = 1.0*h*dirToSignum d
 
@@ -40,12 +40,12 @@ data Ball = Ball { ballLoc :: Vec2f, ballVel :: Vec2f }
     deriving(Show,Read)
 
 boundBall :: Vec2f -> Vec2f -> Float -> Ball -> Ball
-boundBall (Vec2 ox oy) (Vec2 w h) size (Ball (Vec2 lx ly)
-                                             (Vec2 vx vy))
+boundBall (ox,oy) (w,h) size (Ball (lx,ly)
+                                             (vx,vy))
         = Ball newLoc newVel
     where
-        newLoc = Vec2 (bound minx realw lx) (bound miny realh ly)
-        newVel = Vec2 (xBounce*abs vx) (yBounce*abs vy)
+        newLoc = (bound minx realw lx,bound miny realh ly)
+        newVel = (xBounce*abs vx,yBounce*abs vy)
         xBounce = inward minx realw (signum vx) lx
         yBounce = inward miny realh (signum vy) ly
         minx = ox+size/2
@@ -119,43 +119,43 @@ recalcSize size p = p{pScreenSize  = size,
                       pRightPaddle = rp,
                       pBall        = b}
     where
-        psize = Vec2 pw ph
+        psize = (pw,ph)
         pw = ph/3
-        ph = 0.1 * v2y size
-        bsize = Vec2 bs bs
-        bs = 0.2 * v2y psize
-        lp = Paddle $ Vec2 px $ v2y rescale
-                                *v2y (paddleLoc $ pLeftPaddle p)
-        rp = Paddle $ Vec2 (v2x size - px) -- - (pw/2))
-                              $ v2y rescale
-                                *v2y (paddleLoc $ pRightPaddle p)
+        ph = 0.1 * snd size
+        bsize = (bs,bs)
+        bs = 0.2 * snd psize
+        lp = Paddle $ (,) px $ snd rescale
+                                *snd (paddleLoc $ pLeftPaddle p)
+        rp = Paddle $ (,) (fst size - px) -- - (pw/2))
+                              $ snd rescale
+                                *snd (paddleLoc $ pRightPaddle p)
         b = Ball (rescale .*. ballLoc (pBall p))
                  (rescale .*. ballVel (pBall p))
-        rescale = Vec2 (v2x size/v2x (pScreenSize p))
-                       (v2y size/v2y (pScreenSize p))
-        px = 0.1 * v2x size
+        rescale = (fst size/fst (pScreenSize p),
+                   snd size/snd (pScreenSize p))
+        px = 0.1 * fst size
 
 randBallVel :: (Random a,Floating a) =>
                Vec2 a -> StdGen -> (Vec2 a,StdGen)
-randBallVel v r = (v .*. Vec2 x y,r3)
+randBallVel v r = (v .*. (x,y),r3)
     where
         x =  if flip then negate x' else x'
-        (Vec2 x' y) = polarVec mag theta
+        (x',y) = polarVec mag theta
         (flip,r3) = random r2
         (theta,r2) = randomR (-pi/4,pi/4) r1
         (mag,r1) = randomR (0.2,0.4) r -- (0.2,0.4) r
 
 mkPong :: PongParams -> Pong
-mkPong (PongParams size@(Vec2 w h) rand)
-        = recalcSize size $ Pong (Vec2 1 1) vzero vzero lp rp b
+mkPong (PongParams size@(w,h) rand)
+        = recalcSize size $ Pong (1,1) vzero vzero lp rp b
                                  Stop Stop 0 0 True newRand Nothing
                                  False False
     where
-        lp = Paddle (Vec2 0 (v2y mid))
-        rp = Paddle (Vec2 0 (v2y mid))
+        lp = Paddle (0,snd mid)
+        rp = Paddle (0,snd mid)
         b = Ball mid startVel
-        (startVel,newRand) = randBallVel (Vec2 1 1) rand
-        mid = Vec2 0.5 0.5
+        (startVel,newRand) = randBallVel (1,1) rand
+        mid = (0.5,0.5)
 
 isPongOver :: Pong -> Bool
 isPongOver = pDone

@@ -47,7 +47,7 @@ processPongInput pi p = inputDir $ foldl processOne p $ piEvents pi
             SFEvent (SFEvtResized w h) ->
                 let fw = fromIntegral w
                     fh = fromIntegral h in
-                recalcSize (Vec2 fw fh) p
+                recalcSize (fw,fh) p
             SFEvent SFEvtLostFocus -> p{pRunning = False}
             -- SFEvent SFEvtGainedFocus -> p{pHasFocus = True}
             SFEvent (SFEvtKeyPressed{code=key}) -> case key of

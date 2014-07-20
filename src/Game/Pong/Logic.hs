@@ -25,9 +25,9 @@ restrainTo60deg v = if tooVert then corrected else v
     where
         -- tan(60 deg) = sqrt(3) = 0.8660254
         tooVert = abs (tangent v) > 0.8660254
-        corrected = vmag v *. (vsgn v .*. Vec2 0.5 0.8660254)
-        tangent v = v2y v / v2x v
-        vsgn (Vec2 x y) = Vec2 (signum x) (signum y)
+        corrected = vmag v *. (vsgn v .*. (0.5,0.8660254))
+        tangent v = snd v / fst v
+        vsgn (x,y) = (signum x,signum y)
 
 checkGoal :: Vec2f -> Vec2f -> Vec2f -> (Paddle,Paddle) -> Ball
                    -> Ball -> (Ball,Maybe Float,Maybe Side)
@@ -46,9 +46,9 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
                     Nothing -> False
                     _       -> True
         scoreChange
-            | v2x (ballLoc endBall) < v2x (paddleLoc leftPaddle)
+            | fst (ballLoc endBall) < fst (paddleLoc leftPaddle)
                 = Just RightSide
-            | v2x (ballLoc endBall) > v2x (paddleLoc rightPaddle)
+            | fst (ballLoc endBall) > fst (paddleLoc rightPaddle)
                 = Just LeftSide
             | bounced   = Nothing
             | otherwise = case drop 4 bounces of
@@ -76,10 +76,10 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
         paddles = [leftPaddle,rightPaddle,
                    leftPaddle,rightPaddle,
                    leftPaddle,rightPaddle]
-        onPaddle paddle (Vec2 x y) =
-            let py = v2y $ paddleLoc paddle
-                h  = v2y paddleSize
-                bs = v2y ballSize in
+        onPaddle paddle (x,y) =
+            let py = snd $ paddleLoc paddle
+                h  = snd paddleSize
+                bs = snd ballSize in
             y + 0.5*bs >= py - h/2 && y - 0.5*bs <= py + h/2
         intLocs = map (fmap $ interp (ballLoc startBall) (ballLoc endBall))
                       factors
@@ -91,21 +91,21 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
                               [leftPaddleLine,rightPaddleLine,
                                undefined,undefined,
                                leftLine,rightLine]
-        onLeftFact = let (Vec2 bx _) = ballLoc endBall -. 0.5*.ballSize
-                         (Vec2 bvx _) = ballVel startBall
-                         (Vec2 px _) = paddleLoc leftPaddle
+        onLeftFact = let (bx,_) = ballLoc endBall -. 0.5*.ballSize
+                         (bvx,_) = ballVel startBall
+                         (px,_) = paddleLoc leftPaddle
                                        +. paddleHalfSize in
                      const (if bvx < 0 && bx < px then Just 1 else Nothing)
-        onRightFact = let (Vec2 bx _) = ballLoc endBall +. 0.5*.ballSize
-                          (Vec2 bvx _) = ballVel startBall
-                          (Vec2 px _) = paddleLoc rightPaddle
+        onRightFact = let (bx,_) = ballLoc endBall +. 0.5*.ballSize
+                          (bvx,_) = ballVel startBall
+                          (px,_) = paddleLoc rightPaddle
                                         -. paddleHalfSize in
                       const (if bvx > 0 && bx > px then Just 1 else Nothing)
         centerIntersect = segLineIntersect (ballLoc startBall)
                                            (ballLoc endBall)
         edgeIntersect = segLineIntersect edgeStart edgeEnd
         (edgeStart,edgeEnd) = shiftLineToEdgeOnAxis
-                                    (Vec2 1 0)
+                                    (1,0)
                                     ballSize
                                     (ballLoc startBall,
                                      ballLoc endBall)
@@ -113,13 +113,13 @@ checkGoal ssize paddleSize ballSize (leftPaddle,rightPaddle)
         -- ballsgn = negate $ signum $ pBallSize p `vdot` ballChange
         ballChange = ballLoc endBall -. ballLoc startBall
         leftPaddleLine = Line (paddleLoc leftPaddle
-                               +. Vec2 (v2x paddleHalfSize) 0)
-                              (Vec2 1 0)
-        leftLine = Line (paddleLoc leftPaddle) (Vec2 1 0)
+                               +. (fst paddleHalfSize,0))
+                              (1,0)
+        leftLine = Line (paddleLoc leftPaddle) (1,0)
         rightPaddleLine = Line (paddleLoc rightPaddle
-                                -. Vec2 (v2x paddleHalfSize) 0)
-                               (Vec2 (-1) 0)
-        rightLine = Line (paddleLoc rightPaddle) (Vec2 (-1) 0)
+                                -. (fst paddleHalfSize,0))
+                               (-1,0)
+        rightLine = Line (paddleLoc rightPaddle) (-1,0)
         paddleHalfSize = 0.5 *. paddleSize
 
 tickPong :: Float -> Pong -> Pong
@@ -152,10 +152,10 @@ tickPong dt p@Pong{pScreenSize=ssize,
                                                else rscore
         (scoredBall,fact,score) = checkGoal ssize psize bsize
                                          (lPaddle,rPaddle) ball ball1
-        ball1 = boundBall vzero ssize (v2x bsize) $ tickBall dt ball
-        newLPaddle = boundPaddle 0 h (v2y psize)
+        ball1 = boundBall vzero ssize (fst bsize) $ tickBall dt ball
+        newLPaddle = boundPaddle 0 h (snd psize)
                      $ tickPaddle ldir h dt lPaddle
-        newRPaddle = boundPaddle 0 h (v2y psize)
+        newRPaddle = boundPaddle 0 h (snd psize)
                      $ tickPaddle rdir h dt rPaddle
-        h = v2y ssize
+        h = snd ssize
 

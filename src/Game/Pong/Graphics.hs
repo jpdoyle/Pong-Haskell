@@ -68,12 +68,12 @@ drawMidLine wnd = do
     GM.setPrimitiveType va G.Lines
     setVAContents va
                      $ (\p -> G.Vertex p white (W.Vec2f 0 0))
-                     <$> dashedLine (Vec2 mid 0,Vec2 mid h) 80
+                     <$> dashedLine ((mid,0),(mid,h)) 80
     GM.drawVertexArray wnd va Nothing
 
 drawPong :: Pong -> PongContext -> SFML ()
 drawPong p ctx@(PongContext wnd fnt) = forceCleanup $ do
-    let (Vec2 w h) = pScreenSize p
+    let (w,h) = pScreenSize p
     view <- GM.viewFromRect (G.FloatRect 0 0 w h)
     GM.setView wnd view
     GM.clearRenderWindow wnd black

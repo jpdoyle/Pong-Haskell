@@ -48,5 +48,5 @@ runPong =  do
     fntPath <- liftIO $ getDataFileName "MAG.ttf"
     fnt <- GM.fontFromFile fntPath
     rnd <- liftIO newStdGen
-    pongLoop (PongParams (Vec2 640 480) rnd) 40 (PongContext wnd fnt)
+    pongLoop (PongParams (640,480) rnd) 60 (PongContext wnd fnt)
 
